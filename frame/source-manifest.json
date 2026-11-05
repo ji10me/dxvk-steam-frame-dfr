@@ -1,0 +1,29 @@
+{
+  "dxvk_base": "0cfe0898289fb11e3d8d0e1c62cd344b825b7d57",
+  "upstream_dfr": "e410c937d44f818c4de5806a7576f40381cec75f",
+  "source_matches_tested_analytic_renderer_except_license_comment": true,
+  "source_sha256": {
+    "src/dxvk/dxvk_cmdlist.h": "15ceb58f42f090b390973e82a5bb63b8c0d0e991e852b59e992f6fc321227cbf",
+    "src/dxvk/dxvk_context.cpp": "6817ffdac4ba0d77cac29f7fc3caa0fbed61f68520c35ea8653834425c51c1e8",
+    "src/dxvk/dxvk_context.h": "e7e87644bbb412341b1710e6b2d80805bfc2010224773a8578883f79eb3ec15e",
+    "src/dxvk/dxvk_device_info.cpp": "e8cf23768f8af9da597fe6a2daceb5f89753dc09b43876d0012dc1b781b65e65",
+    "src/dxvk/dxvk_device_info.h": "bfc0f9f00cdc5ba9a1f73f95a9309ef498ab5d03402b456b6e8fb7b6d26e42ea",
+    "src/dxvk/dxvk_framebuffer.h": "0606bfd94a222df3858552a7bcb011828f63e7e2d99300e1b26d44aa76de45ef",
+    "src/dxvk/dxvk_gaze_buffer.h": "dd07310e48e90b603198365a0781717e35a3b83d08bf407d5f225d7ab44b7e70",
+    "src/dxvk/dxvk_gaze_dot.h": "11f19a3adc2239b227a1f2f1c78b5acba084668bd55565eaf3fe9aa9b539f8c7",
+    "src/dxvk/dxvk_gaze_map.h": "03b57aec7d3c9cbcfaacaa0b761eeb892478ac611389140e916d84a7798166eb",
+    "src/dxvk/dxvk_gaze_shm.h": "39f197f49cf2d02cb9c183ebfec9de9d2823fe3e5300c84bd7725d23fde925b3",
+    "src/dxvk/dxvk_gaze_source.cpp": "257b9640cf2f3f79a2d9da47cd490fc987345fee5e1eb77b11fe79743f8a3031",
+    "src/dxvk/dxvk_gaze_source.h": "ed4612326740f01e029d635ef0043a938496eac9a59479451d80c6d2155c513d",
+    "src/dxvk/dxvk_gaze_vrs.cpp": "22dd34db31d71f37c4965eeb2df07a165eb0b8bde104faf749806ec046766b90",
+    "src/dxvk/dxvk_gaze_vrs.h": "247addcdc2c3674ce9f45876925698e1fd394d043a3c6379b4b4c60679549473",
+    "src/dxvk/dxvk_graphics.cpp": "ca8ac97b076f58d680943b46685268a9c0c4a21cf9281a5b9aaefb37983b29f0",
+    "src/dxvk/dxvk_graphics.h": "f5deea84411fe6192b9086628c294ce5eadc87bb6c5556b097e100062ecef08f",
+    "src/dxvk/dxvk_shader.cpp": "1e4fbf82c950a7770b8bd0e4ecccfb9247db3057afc03a062b0aefe0cb08665e",
+    "src/dxvk/frame_foveation_map.h": "1921f4c6dd3cd25f9f7e49a62525b2c3aa4b6e1f6d3645bfb2f255f8d25deed8",
+    "src/dxvk/meson.build": "5856e605c81b53482708f6ce67652c7f93c4f4e84983e8dd556af5399685cd1b",
+    "src/vulkan/vulkan_loader.h": "aaae57e066bc07bd9cbfc85f1bf55068c7c249cc545cb8dae4dc7abd6c324f35"
+  },
+  "contains_runtime_binaries": false,
+  "arm64_map_offload": false
+}
