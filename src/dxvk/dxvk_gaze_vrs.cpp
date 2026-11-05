@@ -193,7 +193,8 @@ namespace dxvk
       viewInfo.image = slot->image;
       viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
       viewInfo.format = VK_FORMAT_R8_UINT;
-      viewInfo.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, MaxLayers};
+      viewInfo.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u,
+          fsrProps.layeredShadingRateAttachments ? MaxLayers : 1u};
 
       if (vk->vkCreateImageView(vk->device(), &viewInfo, nullptr, &slot->view))
         return false;
@@ -246,7 +247,8 @@ namespace dxvk
       }
       else if (layers == MaxLayers)
       {
-        candidate = extent.width >= m_minSize && extent.height >= m_minSize;
+        candidate = m_device->properties().khrFragmentShadingRate.layeredShadingRateAttachments
+            && extent.width >= m_minSize && extent.height >= m_minSize;
       }
       else if (layers == 1u)
       {

@@ -6556,62 +6556,61 @@ namespace dxvk {
     // so unconditionally use secondary command buffers on all tiler setups.
     bool useSecondaryCmdBuffer = m_device->perfHints().preferRenderPassOps;
 
-    if (useSecondaryCmdBuffer) {
-      // Begin secondary command buffer on tiling GPUs so that subsequent
-      // resolve, discard and clear commands can modify render pass ops.
-      m_flags.set(DxvkContextFlag::GpRenderPassSecondaryCmd);
+    // Gaze-driven VRS: attach a shading rate image to eye passes
+    bool gazeVrsActive = false;
 
-      renderingInfo.flags = VK_RENDERING_CONTENTS_SECONDARY_COMMAND_BUFFERS_BIT;
+    if (dxvkGazeVrsEnabled(m_device.ptr())) {
+      if (!m_gazeVrs)
+        m_gazeVrs = std::make_unique<DxvkGazeVrs>(m_device.ptr());
 
-      m_cmd->beginSecondaryCommandBuffer(inheritance);
-    } else {
-      // Gaze-driven VRS: attach a shading rate image to eye passes
-      bool gazeVrsActive = false;
+      auto& gazeInfo = m_state.om.renderingInfo.gazeVrs;
+      gazeInfo = { VK_STRUCTURE_TYPE_RENDERING_FRAGMENT_SHADING_RATE_ATTACHMENT_INFO_KHR };
 
-      if (dxvkGazeVrsEnabled(m_device.ptr())) {
-        if (!m_gazeVrs)
-          m_gazeVrs = std::make_unique<DxvkGazeVrs>(m_device.ptr());
+      const auto& gazeColor = framebufferInfo.getColorTarget(0u);
 
-        auto& gazeInfo = m_state.om.renderingInfo.gazeVrs;
-        gazeInfo = { VK_STRUCTURE_TYPE_RENDERING_FRAGMENT_SHADING_RATE_ATTACHMENT_INFO_KHR };
+      gazeVrsActive = m_gazeVrs->prepare(m_cmd.ptr(),
+        VkExtent2D { fbSize.width, fbSize.height }, fbSize.layers,
+        gazeColor.view ? gazeColor.view->info().format : VK_FORMAT_UNDEFINED,
+        gazeColor.view ? gazeColor.view->image()->info().sampleCount : VK_SAMPLE_COUNT_1_BIT,
+        gazeInfo);
 
-        const auto& gazeColor = framebufferInfo.getColorTarget(0u);
+      if (gazeVrsActive) {
+        renderingInfo.pNext = &gazeInfo;
 
-        gazeVrsActive = m_gazeVrs->prepare(m_cmd.ptr(),
-          VkExtent2D { fbSize.width, fbSize.height }, fbSize.layers,
-          gazeColor.view ? gazeColor.view->info().format : VK_FORMAT_UNDEFINED,
-          gazeColor.view ? gazeColor.view->image()->info().sampleCount : VK_SAMPLE_COUNT_1_BIT,
-          gazeInfo);
+        static uint32_t gazeVpLogCount = 0u;
 
-        if (gazeVrsActive) {
-          renderingInfo.pNext = &gazeInfo;
+        if (gazeVpLogCount < 20u) {
+          gazeVpLogCount++;
 
-          static uint32_t gazeVpLogCount = 0u;
+          const auto& gvp = m_state.vp.viewports[0];
+          const auto& gsc = m_state.vp.scissorRects[0];
 
-          if (gazeVpLogCount < 20u) {
-            gazeVpLogCount++;
-
-            const auto& gvp = m_state.vp.viewports[0];
-            const auto& gsc = m_state.vp.scissorRects[0];
-
-            Logger::info(str::format("GazeVRS: pass fb ", fbSize.width, "x", fbSize.height,
-              " viewport(x=", gvp.x, " y=", gvp.y, " w=", gvp.width, " h=", gvp.height, ")",
-              " scissor(x=", gsc.offset.x, " y=", gsc.offset.y, " w=", gsc.extent.width, " h=", gsc.extent.height, ")",
-              " viewports=", m_state.vp.viewportCount));
-          }
+          Logger::info(str::format("GazeVRS: pass fb ", fbSize.width, "x", fbSize.height,
+            " viewport(x=", gvp.x, " y=", gvp.y, " w=", gvp.width, " h=", gvp.height, ")",
+            " scissor(x=", gsc.offset.x, " y=", gsc.offset.y, " w=", gsc.extent.width, " h=", gsc.extent.height, ")",
+            " viewports=", m_state.vp.viewportCount));
         }
       }
-
-      if (m_gazeVrs) {
-        VkExtent2D fragmentSize = { 1u, 1u };
-        VkFragmentShadingRateCombinerOpKHR combiner[2] = {
-          VK_FRAGMENT_SHADING_RATE_COMBINER_OP_KEEP_KHR,
-          VK_FRAGMENT_SHADING_RATE_COMBINER_OP_REPLACE_KHR };
-        m_cmd->cmdSetFragmentShadingRate(&fragmentSize, combiner);
-      }
-
-      m_cmd->cmdBeginRendering(DxvkCmdBuffer::ExecBuffer, &renderingInfo);
     }
+
+    if (useSecondaryCmdBuffer) {
+      m_flags.set(DxvkContextFlag::GpRenderPassSecondaryCmd);
+      renderingInfo.flags |= VK_RENDERING_CONTENTS_SECONDARY_COMMAND_BUFFERS_BIT;
+      renderingInheritance.flags = renderingInfo.flags & ~VK_RENDERING_CONTENTS_SECONDARY_COMMAND_BUFFERS_BIT;
+      m_cmd->beginSecondaryCommandBuffer(inheritance);
+    }
+
+    // Dynamic state belongs to the command buffer that records the draws.
+    if (m_gazeVrs) {
+      VkExtent2D fragmentSize = { 1u, 1u };
+      VkFragmentShadingRateCombinerOpKHR combiner[2] = {
+        VK_FRAGMENT_SHADING_RATE_COMBINER_OP_KEEP_KHR,
+        VK_FRAGMENT_SHADING_RATE_COMBINER_OP_REPLACE_KHR };
+      m_cmd->cmdSetFragmentShadingRate(&fragmentSize, combiner);
+    }
+
+    if (!useSecondaryCmdBuffer)
+      m_cmd->cmdBeginRendering(DxvkCmdBuffer::ExecBuffer, &renderingInfo);
 
     if (lateClearCount) {
       VkClearRect clearRect = { };
@@ -6641,24 +6640,8 @@ namespace dxvk {
   
   
   void DxvkContext::renderPassUnbindFramebuffer() {
-    if (m_flags.test(DxvkContextFlag::GpRenderPassSecondaryCmd)) {
-      m_flags.clr(DxvkContextFlag::GpRenderPassSecondaryCmd);
-      VkCommandBuffer cmdBuffer = m_cmd->endSecondaryCommandBuffer();
-
-      // Record scoped rendering commands with potentially
-      // modified store or resolve ops here
-      flushRenderPassResolves();
-      flushRenderPassDiscards();
-
-      // Need information about clears, discards and resolve
-      // to set up the final load and store ops for the pass
-      finalizeLoadStoreOps();
-
-      auto& renderingInfo = m_state.om.renderingInfo.rendering;
-      m_cmd->cmdBeginRendering(DxvkCmdBuffer::ExecBuffer, &renderingInfo);
-      m_cmd->cmdExecuteCommands(1, &cmdBuffer);
-    }
-
+    // Emit debug clears while still recording the secondary on tilers.
+    // Inline clears in a primary with SECONDARY_CONTENTS are invalid.
     if (g_gazeDot.passActive) {
       g_gazeDot.passActive = false;
 
@@ -6689,6 +6672,24 @@ namespace dxvk {
 
         m_cmd->cmdClearAttachments(DxvkCmdBuffer::ExecBuffer, 1, &dotClear, 1, &dotRect);
       }
+    }
+
+    if (m_flags.test(DxvkContextFlag::GpRenderPassSecondaryCmd)) {
+      m_flags.clr(DxvkContextFlag::GpRenderPassSecondaryCmd);
+      VkCommandBuffer cmdBuffer = m_cmd->endSecondaryCommandBuffer();
+
+      // Record scoped rendering commands with potentially
+      // modified store or resolve ops here
+      flushRenderPassResolves();
+      flushRenderPassDiscards();
+
+      // Need information about clears, discards and resolve
+      // to set up the final load and store ops for the pass
+      finalizeLoadStoreOps();
+
+      auto& renderingInfo = m_state.om.renderingInfo.rendering;
+      m_cmd->cmdBeginRendering(DxvkCmdBuffer::ExecBuffer, &renderingInfo);
+      m_cmd->cmdExecuteCommands(1, &cmdBuffer);
     }
 
     // End actual rendering command
