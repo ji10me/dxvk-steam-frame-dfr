@@ -1,30 +1,35 @@
-# Validation / 検証記録
+# Validation
 
-2026-11-06。公開用の独立チェックアウトで確認した内容です。
+English | [日本語](VALIDATION.ja.md)
 
-| 項目 | 結果 |
+Checks performed on 2026-11-06 using a separate checkout prepared for publication.
+
+| Check | Result |
 | --- | --- |
-| 描画ソースの照合 | 実機で使用したanalytic map版と20ファイルが一致。新kernel先頭のライセンス表示コメントだけ変更 |
-| マップ互換性 | 旧scalar実装とのランダム3,500件、実サイズ、境界、padding、異常入力の検証に合格 |
-| メモリー安全性 | マップ互換性テストをAddressSanitizer・UBSan付きで実行し合格 |
-| DXVK adapter | 実際の公開ヘッダーを使い、引数引き継ぎと無効map時のfallbackを確認 |
-| 視線変換・GAZ2 | NDC/UV、上下反転、校正、異常値、終了時の無効化と64-byte形式の検証に合格 |
-| Python unittest | 3テスト合格 |
-| DXVK DLL | LLVM-MinGWで259ビルドステップ完了。d3d11.dll・dxgi.dllともPE AMD64を確認 |
-| OpenVR publisher | 公式SDK revision 0924064316de3effbcd1acf1e309182a2deb1c05に対し-Wall -Wextra -Werrorの構文チェック合格 |
-| 有限CPUベンチマーク | 20レコードの出力を確認。未測定の旧版値を0として出力しない |
+| Renderer source comparison | All 20 files match the analytic-map renderer used on the headset, apart from the new kernel's license comment |
+| Map compatibility | Passed 3,500 random cases, practical sizes, boundaries, padding and invalid-input checks against the previous scalar implementation |
+| Memory safety | Map compatibility test passed with AddressSanitizer and UBSan |
+| DXVK adapter | Published headers passed field-forwarding and invalid-map fallback checks |
+| Projection and GAZ2 | Passed NDC/UV, vertical inversion, calibration, invalid-value, shutdown invalidation and 64-byte layout checks |
+| Python unittest | Three tests passed |
+| DXVK DLL build | LLVM-MinGW completed all 259 build steps; both d3d11.dll and dxgi.dll were verified as PE AMD64 |
+| OpenVR publisher | Passed a syntax check with -Wall -Wextra -Werror against official SDK revision 0924064316de3effbcd1acf1e309182a2deb1c05 |
+| Bounded CPU benchmark | Produced 20 records; unmeasured legacy timings are not reported as zero |
 
-DLLビルドには既存DXVKのCOM destructorに関する警告があるが、ビルドは完了した。
-今回の公開準備でFrameのゲームを再起動したり、電力設定を変更したりしていない。
-ブリッジの今回のチェックはmacOS上の構文確認で、Linux ARM64での新たなリンク・実行試験ではない。
+The DLL build completed with existing DXVK warnings concerning COM destructors.
+Publication preparation did not restart the headset's game or change its power settings.
+The publisher check above was a syntax check on macOS, not a new Linux ARM64 link or runtime test.
 
-元の実機構成では、同じ描画コードとOpenVRブリッジを用い、本人がDFRの表示と視線位置を確認済み。
-ただし公開用チェックアウトから新しく生成したDLLそのものを、今回Frameへ再導入してはいない。
-ソースのハッシュは `../source-manifest.json` に記録した。
+In the original headset setup, the user confirmed DFR rendering and gaze alignment
+using the same renderer and OpenVR bridge. The newly generated DLLs from the public
+checkout were not installed on the headset again during publication preparation.
+Source hashes are recorded in [source-manifest.json](../source-manifest.json).
 
-マップ計算のARM64単体ベンチマークで得た改善率を、Windows x86-64/FEXで動くDLLや
-VRChat全体のFPS改善率へ換算しない。フレーム上限・CPU負荷・場面によって効果は変わる。
-新しいゲームバージョンや別端末、長時間の安定性を一律に保証するものではない。
+ARM64 CPU map microbenchmark improvements must not be treated as speedups for the
+Windows x86-64/FEX DLL or for VRChat as a whole. Frame caps, CPU load and scene content
+affect the result. New game versions, other devices and long-term stability have
+not all been validated.
 
-公開内容はソース・文書・ライセンスのみ。個人の環境設定、視線データ、実機ログ、
-認証情報、ゲームやランタイムのバイナリーは含めていない。
+Published material consists of source, documentation and licenses. Personal device
+configuration, gaze recordings, device logs, credentials, games and runtime binaries
+are excluded.

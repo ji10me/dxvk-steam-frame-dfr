@@ -1,53 +1,139 @@
-# Steam Frame向け Dynamic Foveated Rendering
+# DXVK — Steam Frame DFR
 
-Steam Frameでローカル描画するWindows版VRChat向けに調整した、**実験的なDXVKフォーク**です。
-視線の付近を細かく、周辺を粗く描くVulkan attachment VRSを使います。
-映像を別のPCから転送する構成でなくても、描画側でDFRを適用できます。
+English | [日本語](README.ja.md)
 
-公開ブランチは **`steam-frame-dfr`** です。
-PCVR環境全体の導入キットではなく、既に単体PCVRが動いている環境で使うDFR部分のソースです。
+An experimental DXVK fork that brings **Dynamic Foveated Rendering (DFR)** to
+Windows VRChat rendered locally on Steam Frame. It uses a Vulkan fragment
+shading rate attachment to preserve detail around the gaze point while reducing
+shading work in the surrounding area.
 
-## Frame向けの追加内容
+This fork is based on DXVK and existing gaze-driven VRS work by ReinaS-64892,
+poprox24 and other contributors. The `steam-frame-dfr` branch contains the
+Frame-specific integration. See [Source provenance](frame/PROVENANCE.md) for the
+exact source revisions and retained upstream components.
 
-- FrameのOpenVR `GetEyeTrackedFoveationCenter` から左右の視線中心を取得するBackgroundプロセス。
-- NDCからUVへの変換、上下反転、必要に応じたゲイン・中心位置の補正。
-- タイル型GPUのsecondary command bufferを維持するVRS処理。
-- layered shading-rate attachment非対応時の分岐。非対応の両眼layered passは通常の描画を継続。
-- 円の境界を求めて連続した領域を埋めるCPUマップ計算。既存のmap領域を再利用する。
-- 視線変換、GAZ2パケット、境界・異常入力・旧計算との互換性を確認する独立テスト。
+## Frame-specific changes
 
-DXVK、ReinaS-64892/vrchat-dfr-linux、poprox24などの実装を基にしています。
-非同期worker、GAZ2、VRS資源管理などの元コードは残っています。
-詳細な出典は[PROVENANCE](frame/PROVENANCE.md)、元のDXVKの説明は[README.upstream.md](README.upstream.md)を参照してください。
+- A native OpenVR Background publisher reads per-eye foveation centers through
+  `GetEyeTrackedFoveationCenter`.
+- NDC-to-UV conversion, optional vertical inversion and per-user calibration
+  connect those centers to the existing GAZ2 protocol.
+- VRS uploads and dynamic state handling preserve the secondary command buffer
+  path used by the tiler renderer.
+- Devices without layered shading-rate attachments use the supported
+  single-layer path; unsupported layered eye passes retain full-rate shading.
+- An analytic-boundary CPU map kernel fills contiguous spans and reuses storage.
+- Standalone tests cover map compatibility, boundaries, invalid inputs,
+  projection and the GAZ2 packet layout.
 
-## ビルド・使い方
+The upstream asynchronous worker, GAZ2 protocol and VRS resource management
+remain part of the implementation.
 
-[日本語のビルド・導入・使い方](frame/docs/BUILD_AND_USE.ja.md)を参照してください。
+## How to use
+
+Start with an existing standalone PCVR setup that can already run Windows
+VRChat in VR on Frame. This repository supplies the DFR source and gaze bridge;
+it does not install FEX, Proton, SteamVR or VRChat.
+
+1. Build the Windows x86-64 `d3d11.dll` and `dxgi.dll` from this branch.
+2. Install them into a separate, writable Proton environment with the original
+   DLLs retained for restoration.
+3. Build and run the native Linux ARM64 OpenVR gaze publisher.
+4. Pass `DXVK_GAZE_VRS=1` and the correct `DXVK_GAZE_FILE` path to the Windows
+   DXVK process. Both processes must see the same GAZ2 file.
+
+The [build and usage guide](frame/docs/BUILD_AND_USE.en.md) covers DLL placement,
+FEX environment forwarding, gaze alignment and restoration.
+The bridge runs as an OpenVR Background application and does not create another
+scene session. Invalid or stale gaze data falls back to full-rate shading.
+
+### Requirements
+
+- An existing Steam Frame standalone PCVR environment.
+- Vulkan attachment fragment shading rate support through
+  `VK_KHR_fragment_shading_rate`.
+- An OpenVR runtime and matching SDK exposing
+  `GetEyeTrackedFoveationCenter`.
+- DXVK's build dependencies for the Windows x86-64 DLLs.
+- A Linux ARM64 C++17 toolchain and OpenVR library for the gaze publisher.
+- Python 3 and a C++17 compiler for the standalone tests.
+
+### Configuration
+
+| Variable | Purpose |
+| --- | --- |
+| `DXVK_GAZE_VRS` | `1` enables gaze VRS; `0` disables it |
+| `DXVK_GAZE_FILE` | Wine-visible path to the publisher's GAZ2 file |
+| `DXVK_GAZE_DOT` | `1` enables alignment dots on supported SBS passes; normally `0` |
+
+See the [usage guide](frame/docs/BUILD_AND_USE.en.md) for region controls and
+bridge calibration. FEX guest environment forwarding depends on the launcher;
+setting only the host's Steam launch options may be insufficient.
+
+## Build instructions
+
+Clone this branch with its submodules:
 
 ```sh
 git clone --branch steam-frame-dfr --recurse-submodules https://github.com/ji10me/dxvk-steam-frame-dfr.git
 cd dxvk-steam-frame-dfr
+```
+
+### Building DLLs
+
+With DXVK's dependencies and a suitable MinGW-w64 toolchain installed:
+
+```sh
+meson setup build-frame --cross-file build-win64.txt --buildtype release \
+  -Denable_d3d8=false -Denable_d3d9=false -Denable_d3d10=false
+meson compile -C build-frame
+```
+
+The relevant outputs are `build-frame/src/d3d11/d3d11.dll` and
+`build-frame/src/dxgi/dxgi.dll`. They run as Windows x86-64 code under FEX;
+the map kernel is not offloaded to a native ARM64 service.
+
+For toolchain requirements, see the [original DXVK build instructions](README.upstream.md#build-instructions).
+The [Frame guide](frame/docs/BUILD_AND_USE.en.md) contains the native OpenVR
+publisher build commands.
+
+### Standalone tests
+
+```sh
 python3 -m unittest discover -s frame/tests -p 'test_*.py' -v
 ```
 
-テストにはPython 3とC++17コンパイラーが必要です。テストはVRランタイムへ接続しません。
-DLLのビルドには、さらにDXVKのビルド依存関係が必要です。
-OpenVRブリッジはFrameのLinux ARM64側、DXVK DLLはWindows x86-64側で動きます。
+These tests do not connect to a VR runtime or a game.
 
-## 動作確認の範囲
+## Validation
 
-元の実機構成で、Frame内のVRChatでDFRを適用し、本人が視線追従と表示を確認しています。
-この公開版は同じ描画コードを切り出し、出典・ライセンス表示とディレクトリ構成を整えたものです。
-マップ計算の単体速度差をゲーム全体のFPS倍率とは扱っていません。
-公開チェックアウトでの検証内容と未検証部分は[VALIDATION](frame/docs/VALIDATION.md)に記載しています。
+The original headset setup has been tested in VRChat, with the user confirming
+rendering and gaze alignment. The published renderer matches that tested
+analytic-map source, apart from a license comment.
+A fresh DLL build and three standalone tests passed during publication.
+See [Validation](frame/docs/VALIDATION.md) for the checks and their limits.
 
-このリポジトリにハードウェア動画デコード修正、端末の個別設定、アカウント情報、
-実機ログ、視線記録、ゲームやProtonの実行ファイルは含めていません。
+CPU map microbenchmarks are not measurements of game-wide FPS gains.
+Performance depends on the scene, CPU load and frame pacing.
 
-## ライセンス
+## Credits and license
 
-DXVKとFrame向けの追加コードは **zlib/libpng（SPDX: Zlib）** です。
-元の[LICENSE](LICENSE)と、追加部分の[frame/LICENSE](frame/LICENSE)を参照してください。
-GAZ2共有ヘッダーは元の **MIT** 表示を保持しています。
-元実装のライセンス案内は[DFR-UPSTREAM.txt](frame/licenses/DFR-UPSTREAM.txt)に同梱しています。
-この公開DFRフォークに、別プロジェクトの個人評価専用・再配布禁止条件は適用しません。
+- [DXVK](https://github.com/doitsujin/dxvk): the translation layer and base renderer.
+- [ReinaS-64892's DFR branch](https://github.com/ReinaS-64892/dxvk/tree/dfr)
+  and [vrchat-dfr-linux](https://github.com/ReinaS-64892/vrchat-dfr-linux):
+  related DFR work. This fork imports the pinned patch identified in
+  [PROVENANCE](frame/PROVENANCE.md).
+- poprox24 and the source contributors: retained upstream work and notices.
+- ji10me: the Frame-specific follow-ups described above.
+
+DXVK and the Frame additions use the **zlib/libpng license (SPDX: Zlib)**;
+see [LICENSE](LICENSE) and [frame/LICENSE](frame/LICENSE).
+The GAZ2 shared header retains its **MIT** notice, with the upstream license
+statement in [DFR-UPSTREAM.txt](frame/licenses/DFR-UPSTREAM.txt).
+The separate standalone PCVR kit's personal-evaluation restrictions do not
+apply to this public DFR fork.
+
+The fork contains DFR source, tests, documentation and licenses. Device logs,
+credentials, recorded gaze, video decoder patches and proprietary runtime
+binaries are not included. The original DXVK README is retained as
+[README.upstream.md](README.upstream.md).

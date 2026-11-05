@@ -1,5 +1,7 @@
 # ビルドと利用手順
 
+[English](BUILD_AND_USE.en.md) | 日本語
+
 ## 1. 前提
 
 既にFrame単体のWindows版VRChatがVR表示できる環境を対象にします。
